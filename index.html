@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BREU – só vês quando paras</title>
+<style>
+:root{color-scheme:dark;--bg:#05060b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#05060b}}
+:root[data-theme="dark"]{--bg:#05060b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+</style>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#05060b">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="BREU">
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(()=>{
+const C=document.getElementById('c'),X=C.getContext('2d'),PY=.8,SP=.36,VX=1.25,TAU=6.283;
+let W,H,pw,x0,R,GH,LR;
+const rnd=(a,b)=>a+Math.random()*(b-a),cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+function size(){const D=Math.min(devicePixelRatio||1,2);W=C.clientWidth;H=C.clientHeight;C.width=W*D;C.height=H*D;X.setTransform(D,0,0,D,0,0);pw=Math.min(W,H*.62,560);x0=(W-pw)/2;R=Math.max(9,pw*.03);GH=Math.max(16,H*.032);LR=pw*.27}
+let S='ready',score=0,passed=0,best=0,newBest=false,gates=[],gn=0,spd=.26,nextY=0,lastC=.5,streak=0,
+p={x:.5},tx=.5,down=false,kd=0,dark=0,shake=0,deadT=0,parts=[],rings=[],floats=[],mute=false,AC;
+const dust=Array.from({length:40},()=>({x:Math.random(),y:Math.random(),s:Math.random()}));
+try{best=+localStorage.getItem('breu_best')||0}catch(e){}
+
+function sfx(f,d,ty,v,to){if(mute)return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type=ty||'sine';o.frequency.setValueAtTime(f,t);if(to)o.frequency.exponentialRampToValueAtTime(to,t+d);g.gain.setValueAtTime(v||.07,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d)}catch(e){}}
+const vib=n=>{try{navigator.vibrate&&navigator.vibrate(n)}catch(e){}};
+
+function addGate(y){const k=Math.min(passed/40,1),w=(.31-.11*k)*rnd(.92,1.08),reach=VX*(SP/spd)*.6,lo=w/2+.03,hi=1-w/2-.03;
+let d=(Math.random()<.5?-1:1)*rnd(.4,1)*reach,c=lastC+d;if(c<lo||c>hi)c=lastC-d;c=cl(c,lo,hi);lastC=c;
+gates.push({y,c,w,h:(190+gn++*19)%360,done:false})}
+function reset(){score=0;passed=0;streak=0;gates=[];gn=0;p.x=.5;lastC=.5;spd=.26;nextY=.2;parts=[];rings=[];floats=[];newBest=false;dark=0;S='play';
+while(nextY>-.1){addGate(nextY);nextY-=SP}}
+
+function pass(g){passed++;const b=dark>.8,pts=b?3:1;score+=pts;streak++;
+sfx(300+(streak%15)*40,.14,'triangle',.08);vib(8);
+const bx=x0+p.x*pw,by=PY*H;
+for(let i=0;i<10;i++)parts.push({x:bx,y:by,vx:rnd(-160,160),vy:rnd(-260,-40),l:.6,m:.6,h:b?48:g.h});
+floats.push({t:0,s:'+'+pts,b})}
+function die(){S='dead';deadT=0;shake=1;newBest=score>best;
+if(newBest){best=score;try{localStorage.setItem('breu_best',best)}catch(e){}}
+sfx(180,.5,'sawtooth',.12,40);vib(90);
+const bx=x0+p.x*pw,by=PY*H;
+for(let i=0;i<46;i++){const a=Math.random()*TAU,s=rnd(60,380);parts.push({x:bx,y:by,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:.9,m:.9,h:rnd(0,40)})}}
+
+function upd(dt){if(S!=='play')return;
+spd=.26+Math.min(passed,50)*.007;
+if(kd)p.x+=kd*VX*dt;else if(down){const d=tx-p.x,m=VX*dt;p.x+=Math.abs(d)<m?d:Math.sign(d)*m}
+p.x=cl(p.x,.03,.97);
+nextY+=spd*dt;while(nextY>-.1){addGate(nextY);nextY-=SP}
+const bx=x0+p.x*pw,by=PY*H;
+for(const g of gates){g.y+=spd*dt;const gy=g.y*H;
+ if(!g.done&&gy+GH/2>by-R*.8&&gy-GH/2<by+R*.8){const L=x0+(g.c-g.w/2)*pw,Rr=x0+(g.c+g.w/2)*pw;if(bx-R*.8<L||bx+R*.8>Rr){die();return}}
+ if(!g.done&&gy-GH/2>by+R){g.done=true;pass(g)}}
+gates=gates.filter(g=>g.y<1.1)}
+
+function fx(dt){const mv=S==='play'&&(down||kd);
+dark+=((mv?1:0)-dark)*(1-Math.exp(-(mv?7:28)*dt));
+shake=Math.max(0,shake-dt*2);deadT+=dt;
+if(S!=='dead')for(const d of dust){d.y+=spd*(.25+d.s*.6)*dt;if(d.y>1){d.y=0;d.x=Math.random()}}
+for(const q of parts){q.x+=q.vx*dt;q.y+=q.vy*dt;q.vy+=520*dt;q.l-=dt}parts=parts.filter(q=>q.l>0);
+rings.forEach(r=>r.t+=dt);rings=rings.filter(r=>r.t<.5);
+floats.forEach(f=>f.t+=dt);floats=floats.filter(f=>f.t<.8)}
+
+function T(s,x,y,sz,col,al,w){X.font=`${w||800} ${sz}px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif`;X.textAlign=al||'center';X.fillStyle=col;X.fillText(s,x,y)}
+function rr(x,y,w,h){if(w<=0)return;X.beginPath();X.roundRect?X.roundRect(x,y,w,h,h/2):X.rect(x,y,w,h);X.fill()}
+const pulse=(f,a,b)=>`rgba(255,255,255,${a+b*Math.sin(performance.now()/f)})`;
+
+function draw(){
+X.save();X.fillStyle='#05060b';X.fillRect(0,0,W,H);
+if(shake>0)X.translate(rnd(-1,1)*shake*10,rnd(-1,1)*shake*10);
+X.fillStyle='rgba(110,130,255,.05)';X.fillRect(x0,0,pw,H);
+X.fillStyle='rgba(180,200,255,.35)';for(const d of dust)X.fillRect(x0+d.x*pw,d.y*H,1.6,1.6+d.s*5);
+const bx=x0+p.x*pw,by=PY*H;
+X.shadowBlur=14;
+for(const g of gates){const L=x0+(g.c-g.w/2)*pw,Rr=x0+(g.c+g.w/2)*pw,gy=g.y*H-GH/2;
+ X.fillStyle=X.shadowColor=`hsl(${g.h} 95% 62%)`;rr(x0,gy,L-x0,GH);rr(Rr,gy,x0+pw-Rr,GH)}
+X.shadowBlur=0;
+if(dark>.01){const gr=X.createRadialGradient(bx,by,LR*.3,bx,by,LR);
+ gr.addColorStop(0,'rgba(5,6,11,0)');gr.addColorStop(1,`rgba(5,6,11,${dark.toFixed(3)})`);
+ X.fillStyle=gr;X.fillRect(-20,-20,W+40,H+40)}
+X.fillStyle='rgba(150,170,255,.22)';X.fillRect(x0-1,0,2,H);X.fillRect(x0+pw-1,0,2,H);
+for(const r of rings){X.strokeStyle=`rgba(159,232,255,${(1-r.t/.5)*.8})`;X.lineWidth=2;X.beginPath();X.arc(bx,by,R+r.t*pw*1.1,0,TAU);X.stroke()}
+if(S!=='dead'){
+ if(down&&S==='play'){X.fillStyle='rgba(159,232,255,.5)';X.fillRect(x0+cl(tx,.03,.97)*pw-1,by+R*1.7,2,R*1.1)}
+ X.shadowColor='#9fe8ff';X.shadowBlur=22;X.fillStyle='#fff';X.beginPath();X.arc(bx,by,R,0,TAU);X.fill();X.shadowBlur=0}
+for(const q of parts){X.fillStyle=`hsla(${q.h},95%,65%,${cl(q.l/q.m,0,1)})`;X.fillRect(q.x-2,q.y-2,4,4)}
+for(const f of floats)T(f.s,bx,by-R*2-f.t*70,pw*.07,f.b?`rgba(255,200,60,${1-f.t/.8})`:`rgba(255,255,255,${1-f.t/.8})`);
+const k=pw*.17;
+if(S==='play'){T(score,W/2,H*.1+k*.35,k,'rgba(255,255,255,.92)');
+ if(dark>.8)T('Às cegas: +3',W/2,H*.1+k*.35+pw*.075,pw*.05,`rgba(255,200,60,${.7+.3*Math.sin(performance.now()/90)})`,null,700)}
+T('Melhor '+best,x0+14,26,13,'rgba(255,255,255,.45)','left',700);
+T(mute?'🔇':'🔊',W-14,28,20,'#fff','right',400);
+if(S==='ready'){
+ T('BREU',W/2,H*.3,pw*.27,'#fff',null,900);
+ T('só vês quando paras',W/2,H*.3+pw*.09,pw*.06,'#9fb4ff',null,600);
+ ['Arrasta: a bola segue, mas ficas às escuras','Levanta o dedo: as portas acendem','Passar às cegas vale 3 pontos','No PC: rato ou setas'].forEach((s,i)=>T(s,W/2,H*.5+i*pw*.085,pw*.038,'rgba(255,255,255,.78)',null,500));
+ T('Toca para jogar',W/2,H*.8,pw*.058,pulse(300,.55,.45))}
+if(S==='dead'){X.fillStyle='rgba(5,6,11,.55)';X.fillRect(-20,-20,W+40,H+40);
+ T(score,W/2,H*.38,pw*.3,'#fff');
+ T(newBest?'Novo recorde!':'Melhor '+best,W/2,H*.38+pw*.11,pw*.06,newBest?'#ffc83c':'#9fb4ff',null,700);
+ if(deadT>.5)T('Toca para repetir',W/2,H*.7,pw*.058,pulse(250,.55,.45))}
+X.restore()}
+
+const xOf=e=>(e.clientX-C.getBoundingClientRect().left-x0)/pw;
+C.addEventListener('pointerdown',e=>{e.preventDefault();const r=C.getBoundingClientRect();
+ if(e.clientX-r.left>W-60&&e.clientY-r.top<60){mute=!mute;return}
+ if(S==='ready'||(S==='dead'&&deadT>.5))reset();
+ tx=xOf(e);down=true;try{C.setPointerCapture(e.pointerId)}catch(_){}});
+C.addEventListener('pointermove',e=>{if(down)tx=xOf(e)});
+const up=()=>{if(down){down=false;if(S==='play')rings.push({t:0})}};
+C.addEventListener('pointerup',up);C.addEventListener('pointercancel',up);
+C.addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('keydown',e=>{const k=e.key;if(k==='ArrowLeft'||k==='ArrowRight'||k===' ')e.preventDefault();
+ const l=k==='ArrowLeft'||k==='a',r=k==='ArrowRight'||k==='d';
+ if(l)kd=-1;if(r)kd=1;
+ if((l||r||k===' '||k==='Enter')&&(S==='ready'||(S==='dead'&&deadT>.5)))reset()});
+addEventListener('keyup',e=>{if(['ArrowLeft','a','ArrowRight','d'].includes(e.key)){if(kd&&S==='play')rings.push({t:0});kd=0}});
+
+let last=performance.now();
+function loop(n){const dt=Math.min((n-last)/1000,.05);last=n;upd(dt);fx(dt);draw();requestAnimationFrame(loop)}
+size();addEventListener('resize',size);requestAnimationFrame(loop);
+})();
+</script>
+<script>if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))</script>
+</body>
+</html>
